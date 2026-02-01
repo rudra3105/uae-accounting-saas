@@ -1,0 +1,312 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Authentication & Authorization
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  password  String
+  firstName String
+  lastName  String
+  active    Boolean    @default(true)
+  company   Company    @relation(fields: [companyId], references: [id])
+  companyId String
+  role      Role       @relation(fields: [roleId], references: [id])
+  roleId    String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([companyId])
+  @@index([roleId])
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  permissions Permission[]
+  users       User[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Permission {
+  id        String   @id @default(cuid())
+  name      String
+  module    String   // e.g., "sales", "inventory", "accounting"
+  action    String   // e.g., "create", "read", "update", "delete"
+  roles     Role[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Company Configuration
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  trn         String?  // Tax Registration Number
+  emirate     String?
+  address     String?
+  city        String?
+  phone       String?
+  email       String?
+  currency    String   @default("AED")
+  vatRate     Float    @default(5.0)
+  vatEnabled  Boolean  @default(true)
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Sales Module
+model Sale {
+  id              String       @id @default(cuid())
+  invoiceNumber   String       @unique
+  customer        Customer     @relation(fields: [customerId], references: [id])
+  customerId      String
+  saleDate        DateTime
+  dueDate         DateTime?
+  subtotal        Float
+  vatAmount       Float
+  totalAmount     Float
+  status          String       @default("pending") // pending, paid, partial
+  paymentMode     String?
+  notes           String?
+  items           SaleItem[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([customerId])
+}
+
+model SaleItem {
+  id        String   @id @default(cuid())
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  saleId    String
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String
+  quantity  Int
+  unitPrice Float
+  taxRate   Float    @default(5.0)
+  amount    Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  city      String?
+  balance   Float    @default(0)
+  sales     Sale[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Purchase Module
+model Purchase {
+  id              String         @id @default(cuid())
+  poNumber        String         @unique
+  vendor          Vendor         @relation(fields: [vendorId], references: [id])
+  vendorId        String
+  purchaseDate    DateTime
+  dueDate         DateTime?
+  subtotal        Float
+  vatAmount       Float
+  totalAmount     Float
+  status          String         @default("pending") // pending, received, invoiced
+  paymentMode     String?
+  notes           String?
+  items           PurchaseItem[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([vendorId])
+}
+
+model PurchaseItem {
+  id         String   @id @default(cuid())
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  purchaseId String
+  product    Product  @relation(fields: [productId], references: [id])
+  productId  String
+  quantity   Int
+  unitPrice  Float
+  taxRate    Float    @default(5.0)
+  amount     Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([purchaseId])
+  @@index([productId])
+}
+
+model Vendor {
+  id        String      @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  city      String?
+  balance   Float       @default(0)
+  purchases Purchase[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+// Inventory Module
+model Product {
+  id            String         @id @default(cuid())
+  name          String
+  description   String?
+  sku           String         @unique
+  barcode       String?
+  category      Category       @relation(fields: [categoryId], references: [id])
+  categoryId    String
+  price         Float
+  costPrice     Float
+  reorderLevel  Int            @default(10)
+  saleItems     SaleItem[]
+  purchaseItems PurchaseItem[]
+  stocks        Stock[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([categoryId])
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String
+  products Product[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Warehouse {
+  id       String   @id @default(cuid())
+  name     String
+  location String?
+  stocks   Stock[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Stock {
+  id          String      @id @default(cuid())
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId   String
+  warehouse   Warehouse   @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  warehouseId String
+  quantity    Int
+  movements   StockMovement[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([productId, warehouseId])
+  @@index([productId])
+  @@index([warehouseId])
+}
+
+model StockMovement {
+  id          String   @id @default(cuid())
+  stock       Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  stockId     String
+  type        String   // IN, OUT, ADJUSTMENT
+  quantity    Int
+  reference   String?  // Sale ID, Purchase ID, or adjustment note
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([stockId])
+}
+
+// Accounting Module
+model Account {
+  id              String          @id @default(cuid())
+  code            String          @unique
+  name            String
+  type            String          // Asset, Liability, Equity, Revenue, Expense
+  debit           Float           @default(0)
+  credit          Float           @default(0)
+  balance         Float           @default(0)
+  journalItems    JournalItem[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model JournalEntry {
+  id          String        @id @default(cuid())
+  entryNumber String        @unique
+  description String
+  entryDate   DateTime
+  reference   String?       // Sale ID, Purchase ID, etc.
+  items       JournalItem[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model JournalItem {
+  id              String        @id @default(cuid())
+  journalEntry    JournalEntry  @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  journalEntryId  String
+  account         Account       @relation(fields: [accountId], references: [id])
+  accountId       String
+  debit           Float         @default(0)
+  credit          Float         @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([journalEntryId])
+  @@index([accountId])
+}
+
+// Utility Tables
+model InvoiceSeries {
+  id       String   @id @default(cuid())
+  prefix   String   // SI, PO
+  nextNumber Int    @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TaxRate {
+  id       String   @id @default(cuid())
+  name     String   // Standard, Zero, Exempt
+  rate     Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PaymentMode {
+  id       String   @id @default(cuid())
+  name     String   // Cash, Card, Bank Transfer
+  active   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  module    String
+  details   String?
+  createdAt DateTime @default(now())
+}
